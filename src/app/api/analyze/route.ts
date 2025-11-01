@@ -3,7 +3,7 @@ import { analyzeImageBuffer } from "@/lib/extractors/image";
 import { analyzeUrlForStyle } from "@/lib/extractors/url";
 import { generateSemanticEmbedding, persistEmbedding } from "@/lib/embeddings";
 import { buildClustersFromAnalyses } from "@/lib/analysis";
-import { generateGuidelineWithLLM } from "@/lib/openai";
+import { generateGuidelineWithLLM, generateDesignDirections } from "@/lib/openai";
 import { getSupabaseAdminClient, getSupabaseBucketName } from "@/lib/supabase";
 import { getDevInspirationRecords } from "@/lib/dev-store";
 import type {
@@ -17,6 +17,8 @@ export const runtime = "nodejs";
 type AnalyzeRequestDto = {
   inspirationIds?: string[];
   imageIds?: string[];
+  projectContext?: string;
+  projectUrl?: string;
 };
 
 type ResolvedInspirationRecord = SupabaseInspirationRecord & {
@@ -64,6 +66,8 @@ async function fetchInspirationRecords(
 export async function POST(request: Request) {
   const body = (await request.json().catch(() => ({}))) as AnalyzeRequestDto;
   const inspirationIds = body.inspirationIds ?? body.imageIds ?? [];
+  const projectContext = body.projectContext?.trim() || undefined;
+  const projectUrl = body.projectUrl?.trim() || undefined;
 
   if (!inspirationIds.length) {
     return NextResponse.json({ message: "No inspirations provided" }, { status: 400 });
@@ -174,11 +178,35 @@ export async function POST(request: Request) {
   const clusters = buildClustersFromAnalyses(analyses);
   const guidelinePayload = await generateGuidelineWithLLM(analyses, clusters);
 
+  // Generate design directions if project context is provided
+  let directions: AnalysisResult["directions"] = undefined;
+  if (projectContext) {
+    try {
+      directions = await generateDesignDirections(
+        guidelinePayload.guideline,
+        guidelinePayload.summary,
+        projectContext,
+        analyses,
+      );
+    } catch (error) {
+      console.error("Design direction generation failed, continuing without directions", error);
+    }
+  }
+
+  const projectProfile = projectContext || projectUrl
+    ? {
+        contextNotes: projectContext,
+        siteUrl: projectUrl,
+      }
+    : undefined;
+
   const payload: AnalysisResult = {
     inspirations: analyses,
     clusters,
     guideline: guidelinePayload.guideline,
     synthesis: guidelinePayload.summary,
+    directions,
+    projectProfile,
   };
 
   return NextResponse.json(payload, { status: 200 });

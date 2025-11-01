@@ -4,6 +4,7 @@ import type {
   BrandGuideline,
   BrandGuidelineSummary,
   ClusterSummary,
+  DesignDirection,
   InspirationAnalysis,
 } from "@/lib/types";
 
@@ -178,10 +179,6 @@ export async function generateGuidelineWithLLM(
   try {
     const response = await client.responses.create({
       model: DEFAULT_MODELS.text,
-      response_format: {
-        type: "json_schema",
-        json_schema: guidelineSchema,
-      },
       input: [
         {
           role: "system",
@@ -192,7 +189,7 @@ export async function generateGuidelineWithLLM(
           role: "user",
           content: [
             {
-              type: "text",
+              type: "input_text",
               text: JSON.stringify(payload),
             },
           ],
@@ -210,6 +207,162 @@ export async function generateGuidelineWithLLM(
   } catch (error) {
     console.error("Guideline synthesis failed", error);
     return withFallback(analyses);
+  }
+}
+
+const designDirectionSchema = {
+  name: "DesignDirections",
+  schema: {
+    type: "object",
+    properties: {
+      directions: {
+        type: "array",
+        minItems: 2,
+        maxItems: 3,
+        items: {
+          type: "object",
+          properties: {
+            id: { type: "string" },
+            concept: { type: "string" },
+            tagline: { type: "string" },
+            description: { type: "string" },
+            reasoning: { type: "string" },
+            colorApplication: {
+              type: "object",
+              properties: {
+                hero: { type: "string" },
+                background: { type: "string" },
+                accent: { type: "string" },
+                text: { type: "string" },
+              },
+              required: ["hero", "background", "accent", "text"],
+            },
+            typographyApplication: {
+              type: "object",
+              properties: {
+                headline: fontSchema,
+                body: fontSchema,
+                hierarchy: { type: "string" },
+              },
+              required: ["headline", "body", "hierarchy"],
+            },
+            heroSection: {
+              type: "object",
+              properties: {
+                headline: { type: "string" },
+                subheadline: { type: "string" },
+                ctaText: { type: "string" },
+                visualTreatment: { type: "string" },
+              },
+              required: ["headline", "subheadline", "ctaText", "visualTreatment"],
+            },
+            layoutStyle: { type: "string" },
+            keyFeatures: { type: "array", items: { type: "string" }, minItems: 3, maxItems: 5 },
+            ctaStrategy: {
+              type: "object",
+              properties: {
+                style: { type: "string" },
+                placement: { type: "string" },
+                tone: { type: "string" },
+              },
+              required: ["style", "placement", "tone"],
+            },
+          },
+          required: [
+            "id",
+            "concept",
+            "tagline",
+            "description",
+            "reasoning",
+            "colorApplication",
+            "typographyApplication",
+            "heroSection",
+            "layoutStyle",
+            "keyFeatures",
+            "ctaStrategy",
+          ],
+        },
+      },
+    },
+    required: ["directions"],
+  },
+} as const;
+
+export async function generateDesignDirections(
+  guideline: BrandGuideline,
+  synthesis: BrandGuidelineSummary,
+  projectContext: string,
+  analyses: InspirationAnalysis[],
+): Promise<DesignDirection[]> {
+  if (!hasOpenAIKey()) {
+    return [];
+  }
+
+  const client = getOpenAIClient();
+  if (!client) {
+    return [];
+  }
+
+  const payload = {
+    projectContext,
+    brandGuideline: {
+      palette: guideline.palette,
+      typography: guideline.typography,
+      mood: synthesis.mood,
+      keywords: synthesis.keywords,
+      narrative: synthesis.narrative,
+    },
+    visualAnalysis: {
+      dominantColors: analyses.flatMap((a) => a.dominantColors.slice(0, 3).map((c) => c.hex)),
+      fonts: analyses.flatMap((a) => a.fontCandidates.map((f) => ({ family: f.family, category: f.category }))),
+      moodKeywords: analyses.flatMap((a) => a.descriptors.moodKeywords),
+    },
+  };
+
+  const systemPrompt = `You are a senior web designer and brand strategist. Given:
+1. A project/product description from the user
+2. Brand guidelines (colors, typography, mood) extracted from their visual inspirations
+
+Generate 2-3 distinct design directions for their landing page. Each direction should:
+- Have a clear, memorable concept name (e.g., "Minimalist Professional", "Bold & Energetic")
+- Use the extracted brand colors differently to create distinct personalities
+- Apply typography in unique ways that fit the concept
+- Include a complete hero section with headline, subheadline, and CTA
+- Explain WHY this direction works for their specific product/audience
+- Be production-ready with specific hex codes and font applications
+
+Make each direction feel distinct but rooted in their visual DNA. Consider their target audience and product positioning.`;
+
+  try {
+    const response = await client.responses.create({
+      model: DEFAULT_MODELS.text,
+      input: [
+        {
+          role: "system",
+          content: systemPrompt,
+        },
+        {
+          role: "user",
+          content: [
+            {
+              type: "input_text",
+              text: JSON.stringify(payload),
+            },
+          ],
+        },
+      ],
+    });
+
+    const output = response.output_text;
+    if (!output) {
+      throw new Error("OpenAI response missing text");
+    }
+
+    const parsed = JSON.parse(output) as { directions: DesignDirection[] };
+    return parsed.directions;
+  } catch (error) {
+    console.error("Design direction generation failed", error);
+    return [];
   }
 }
 

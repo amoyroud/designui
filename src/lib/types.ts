@@ -144,15 +144,60 @@ export type AnalysisJobRecord = {
   error: string | null;
 };
 
+export type DesignDirection = {
+  id: string;
+  concept: string;
+  tagline: string;
+  description: string;
+  reasoning: string;
+  colorApplication: {
+    hero: string;
+    background: string;
+    accent: string;
+    text: string;
+  };
+  typographyApplication: {
+    headline: FontCandidate;
+    body: FontCandidate;
+    hierarchy: string;
+  };
+  heroSection: {
+    headline: string;
+    subheadline: string;
+    ctaText: string;
+    visualTreatment: string;
+  };
+  layoutStyle: string;
+  keyFeatures: string[];
+  ctaStrategy: {
+    style: string;
+    placement: string;
+    tone: string;
+  };
+};
+
+export type ProjectProfile = {
+  contextNotes?: string;
+  siteUrl?: string;
+  siteSummary?: string;
+  sitePalette?: ColorSwatch[];
+  siteFonts?: FontCandidate[];
+  siteMood?: string[];
+};
+
 export type AnalysisResult = {
   inspirations: InspirationAnalysis[];
   clusters: ClusterSummary[];
   guideline: BrandGuideline;
   synthesis: BrandGuidelineSummary;
+  directions?: DesignDirection[];
+  projectProfile?: ProjectProfile;
 };
 
 export type AnalyzeRequestPayload = {
   inspirationIds: string[];
+  projectContext?: string;
+  projectUrl?: string;
   jobId?: string;
   options?: {
     clusterCount?: number;

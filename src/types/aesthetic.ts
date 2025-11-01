@@ -13,6 +13,8 @@ export type {
   ImageryGuideline,
   BrandGuideline,
   BrandGuidelineSummary,
+  DesignDirection,
+  ProjectProfile,
   AnalysisJobStatus,
   AnalysisJobRecord,
   AnalysisResult,

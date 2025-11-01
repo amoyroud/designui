@@ -35,7 +35,7 @@ function buildEssenceFromStats(stats: SharpStats | undefined): ImageEssence {
   const averageLuminance = means.length
     ? means.reduce((sum, value) => sum + value, 0) / (means.length * 255)
     : 0.5;
-  const contrast = stats.channels?.reduce((acc, channel) => Math.max(acc, channel.stdDev), 0) ?? 30;
+  const contrast = stats.channels?.reduce((acc, channel) => Math.max(acc, channel.stdev ?? 0), 0) ?? 30;
 
   const mood: string[] = [];
   if (averageLuminance > 0.7) {
